@@ -20,6 +20,20 @@ export function QueryDetails({
       ? battle.database1
       : battle.database2;
 
+  // Calculate average relevance score for each provider
+  const calculateAverageRelevanceScore = (results: SearchResult[]) => {
+    const scores = results
+      .map((item) => item.score)
+      .filter(
+        (score): score is number => score !== undefined && score !== null && !isNaN(score)
+      );
+
+    if (scores.length === 0) return null;
+    const average =
+      scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    return average;
+  };
+
   return (
     <motion.div
       className="flex-grow overflow-y-auto border rounded bg-white"
@@ -103,80 +117,114 @@ export function QueryDetails({
         >
           {selectedQuery.results
             .sort((a) => (a.databaseId === battle.databaseId1 ? -1 : 1))
-            .map((result) => (
-              <div key={result.id}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">
-                    {result.databaseId === battle.databaseId1
-                      ? battle.database1.label
-                      : battle.database2.label}
-                  </h3>
-                  <div className="flex gap-1">
-                    {result.score && Number(result.score) !== -1 && (
-                      <Badge
-                        className="text-xs"
-                        style={{
-                          backgroundColor:
-                            PROVIDERS[database.provider].color["100"],
-                          color: PROVIDERS[database.provider].color["800"],
-                        }}
-                      >
-                        Score:{" "}
-                        {Number(result.score) === -1 ? "-" : result.score}
-                      </Badge>
-                    )}
-                    {result.searchDuration && (
-                      <Badge className="bg-amber-100 text-amber-800 text-xs">
-                        Search: {Number(result.searchDuration).toFixed(0)}ms
-                      </Badge>
-                    )}
+            .map((result) => {
+              const currentDatabase =
+                result.databaseId === battle.databaseId1
+                  ? battle.database1
+                  : battle.database2;
+              const averageRelevanceScore = calculateAverageRelevanceScore(
+                result.results as SearchResult[]
+              );
+
+              return (
+                <div key={result.id}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold">
+                      {result.databaseId === battle.databaseId1
+                        ? battle.database1.label
+                        : battle.database2.label}
+                    </h3>
+                    <div className="flex gap-1">
+                      {result.score && Number(result.score) !== -1 && (
+                        <Badge
+                          className="text-xs"
+                          style={{
+                            backgroundColor:
+                              PROVIDERS[currentDatabase.provider].color["100"],
+                            color:
+                              PROVIDERS[currentDatabase.provider].color["800"],
+                          }}
+                        >
+                          Score:{" "}
+                          {Number(result.score) === -1 ? "-" : result.score}
+                        </Badge>
+                      )}
+                      {averageRelevanceScore !== null && (
+                        <Badge className="bg-blue-100 text-blue-800 text-xs">
+                          Avg Relevance: {averageRelevanceScore.toFixed(2)}
+                        </Badge>
+                      )}
+                      {result.searchDuration && (
+                        <Badge className="bg-amber-100 text-amber-800 text-xs">
+                          Search: {Number(result.searchDuration).toFixed(0)}ms
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {result.llmFeedback && (
+                    <p className="text-xs text-gray-500 my-2 h-[100px] overflow-scroll">
+                      {result.llmFeedback}
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    <AnimatePresence>
+                      {(result.results as SearchResult[]).map((item, index) => (
+                        <motion.div
+                          key={index}
+                          className="border rounded p-2 text-xs"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{
+                            duration: 0.3,
+                            delay: index * 0.05,
+                          }}
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="font-medium">{item.title}</div>
+                            <span className="text-zinc-500">
+                              {item.score?.toFixed(2)}
+                            </span>
+                          </div>
+                          {item.url && (
+                            <div className="mb-1">
+                              <a
+                                href={
+                                  item.url.startsWith("https://vercel.com")
+                                    ? item.url
+                                    : `https://vercel.com${item.url}`
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-xs underline break-all"
+                              >
+                                {item.url.startsWith("https://vercel.com")
+                                  ? item.url
+                                  : `https://vercel.com${item.url}`}
+                              </a>
+                            </div>
+                          )}
+                          <motion.p
+                            initial={{
+                              opacity: 0,
+                              height: hideDescriptions ? "0" : "auto",
+                            }}
+                            animate={{
+                              opacity: 1,
+                              height: hideDescriptions ? "0" : "auto",
+                            }}
+                            transition={{ delay: index * 0.02 }}
+                            className="text-gray-600 mb-1 line-clamp-2"
+                          >
+                            {item.description}
+                          </motion.p>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
                 </div>
-                {result.llmFeedback && (
-                  <p className="text-xs text-gray-500 my-2 h-[100px] overflow-scroll">
-                    {result.llmFeedback}
-                  </p>
-                )}
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {(result.results as SearchResult[]).map((item, index) => (
-                      <motion.div
-                        key={index}
-                        className="border rounded p-2 text-xs"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{
-                          duration: 0.3,
-                          delay: index * 0.05,
-                        }}
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <div className="font-medium">{item.title}</div>
-                          <span className="text-zinc-500">
-                            {item.score?.toFixed(2)}
-                          </span>
-                        </div>
-                        <motion.p
-                          initial={{
-                            opacity: 0,
-                            height: hideDescriptions ? "0" : "auto",
-                          }}
-                          animate={{
-                            opacity: 1,
-                            height: hideDescriptions ? "0" : "auto",
-                          }}
-                          transition={{ delay: index * 0.02 }}
-                          className="text-gray-600 mb-1 line-clamp-2"
-                        >
-                          {item.description}
-                        </motion.p>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </div>
-            ))}
+              );
+            })}
         </motion.div>
       </div>
     </motion.div>
