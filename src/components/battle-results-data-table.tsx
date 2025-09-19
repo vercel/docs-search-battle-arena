@@ -532,13 +532,18 @@ export default function BattleResultsDataTable({
     (id: string) => {
       const battle = battleResults?.find((b) => b.id === id);
       if (battle) {
+        // Convert queries array to string format for the modal
+        const queriesString = Array.isArray(battle.queries) 
+          ? battle.queries.map(q => q.queryText).join('\n')
+          : battle.queries;
+          
         setEditBattleData({
           open: true,
           data: {
             label: battle.label,
             databaseId1: battle.databaseId1,
             databaseId2: battle.databaseId2,
-            queries: battle.queries,
+            queries: queriesString,
           },
         });
       }
