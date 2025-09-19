@@ -1,4 +1,5 @@
 import { BattleQuery, BattleResult } from "@/api/trpc";
+import { SearchResult } from "@/api/providers/types";
 import { Trophy } from "lucide-react";
 
 export function QueryItem({
@@ -22,15 +23,36 @@ export function QueryItem({
     (r) => r.databaseId === battle?.databaseId2
   );
 
-  // Calculate score difference
+  // Calculate average relevance scores
+  const calculateAverageRelevanceScore = (results: SearchResult[]) => {
+    const scores = results
+      .map((item) => item.score)
+      .filter(
+        (score): score is number => score !== undefined && score !== null && !isNaN(score)
+      );
+
+    if (scores.length === 0) return null;
+    const average =
+      scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    return average;
+  };
+
+  const db1AvgRelevance = db1Result 
+    ? calculateAverageRelevanceScore(db1Result.results as SearchResult[])
+    : null;
+  const db2AvgRelevance = db2Result 
+    ? calculateAverageRelevanceScore(db2Result.results as SearchResult[])
+    : null;
+
+  // Calculate score difference using average relevance scores
   const scoreDiff = Math.abs(
-    Number(db1Result?.score) - Number(db2Result?.score)
+    (db1AvgRelevance || 0) - (db2AvgRelevance || 0)
   );
 
-  // Determine winner
-  const db1Wins = Number(db1Result?.score) > Number(db2Result?.score);
-  const db2Wins = Number(db2Result?.score) > Number(db1Result?.score);
-  const isLLMDisabled = db1Result?.score === "-1" && db2Result?.score === "-1";
+  // Determine winner using average relevance scores
+  const db1Wins = (db1AvgRelevance || 0) > (db2AvgRelevance || 0);
+  const db2Wins = (db2AvgRelevance || 0) > (db1AvgRelevance || 0);
+  const isRelevanceDisabled = db1AvgRelevance === null && db2AvgRelevance === null;
 
   return (
     <div
@@ -47,16 +69,20 @@ export function QueryItem({
         <div className="text-red-500 text-xs truncate whitespace-normal max-h-[50px]">
           {queryResult.error}
         </div>
-      ) : !isLLMDisabled ? (
+      ) : !isRelevanceDisabled ? (
         <div className="flex items-center justify-between text-xs">
           <div className="flex space-x-2">
-            <span className="text-blue-600 font-mono">{db1Result?.score}</span>
+            <span className="text-blue-600 font-mono">
+              {db1AvgRelevance?.toFixed(2) || "-"}
+            </span>
             <span className="text-gray-400">vs</span>
-            <span className="text-green-600 font-mono">{db2Result?.score}</span>
+            <span className="text-green-600 font-mono">
+              {db2AvgRelevance?.toFixed(2) || "-"}
+            </span>
           </div>
           <div className="flex items-center space-x-1">
             <span className="text-gray-500 font-mono">
-              Δ{scoreDiff.toFixed(1)}
+              Δ{scoreDiff.toFixed(2)}
             </span>
             {db1Wins ? (
               <Trophy className="h-3 w-3 text-blue-500" />

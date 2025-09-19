@@ -1,4 +1,5 @@
 import { BattleResult, BattleQuery } from "@/api/trpc";
+import { SearchResult } from "@/api/providers/types";
 import {
   Select,
   SelectTrigger,
@@ -63,6 +64,20 @@ export function QueryListSortSelect({
   );
 }
 
+// Helper function to calculate average relevance score
+const calculateAverageRelevanceScore = (results: SearchResult[]) => {
+  const scores = results
+    .map((item) => item.score)
+    .filter(
+      (score): score is number => score !== undefined && score !== null && !isNaN(score)
+    );
+
+  if (scores.length === 0) return 0;
+  const average =
+    scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  return average;
+};
+
 export function sortQueryResults({
   queries,
   sortBy,
@@ -91,26 +106,28 @@ export function sortQueryResults({
       return 0;
     }
 
+    // Calculate average relevance scores
+    const aDb1AvgRelevance = calculateAverageRelevanceScore(aDb1Result.results as SearchResult[]);
+    const aDb2AvgRelevance = calculateAverageRelevanceScore(aDb2Result.results as SearchResult[]);
+    const bDb1AvgRelevance = calculateAverageRelevanceScore(bDb1Result.results as SearchResult[]);
+    const bDb2AvgRelevance = calculateAverageRelevanceScore(bDb2Result.results as SearchResult[]);
+
     switch (sortBy) {
       case "db1-score":
-        return Number(bDb1Result.score) - Number(aDb1Result.score); // Higher scores first
+        return bDb1AvgRelevance - aDb1AvgRelevance; // Higher scores first
       case "db2-score":
-        return Number(bDb2Result.score) - Number(aDb2Result.score); // Higher scores first
+        return bDb2AvgRelevance - aDb2AvgRelevance; // Higher scores first
       case "score-diff-1":
-        const firstDiff = Number(bDb1Result.score) - Number(bDb2Result.score);
-        const secondDiff = Number(aDb1Result.score) - Number(aDb2Result.score);
+        const firstDiff = bDb1AvgRelevance - bDb2AvgRelevance;
+        const secondDiff = aDb1AvgRelevance - aDb2AvgRelevance;
         return firstDiff - secondDiff; // Larger differences first
       case "score-diff-2":
-        const firstDiff2 = Number(bDb2Result.score) - Number(bDb1Result.score);
-        const secondDiff2 = Number(aDb2Result.score) - Number(aDb1Result.score);
+        const firstDiff2 = bDb2AvgRelevance - bDb1AvgRelevance;
+        const secondDiff2 = aDb2AvgRelevance - aDb1AvgRelevance;
         return firstDiff2 - secondDiff2; // Larger differences first
       case "diff":
-        const firstDiff3 = Math.abs(
-          Number(bDb1Result.score) - Number(bDb2Result.score)
-        );
-        const secondDiff3 = Math.abs(
-          Number(aDb1Result.score) - Number(aDb2Result.score)
-        );
+        const firstDiff3 = Math.abs(bDb1AvgRelevance - bDb2AvgRelevance);
+        const secondDiff3 = Math.abs(aDb1AvgRelevance - aDb2AvgRelevance);
         return firstDiff3 - secondDiff3; // Larger differences first
       default:
         return 0;

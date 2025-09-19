@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { trpc } from "@/api/trpc/client";
 import { BattleResult } from "@/api/trpc";
+import { SearchResult } from "@/api/providers/types";
 import { ProviderBadge } from "./provider-badge";
 import { SimpleTooltip } from "./ui/simple-tooltip";
 import { motion, AnimatePresence } from "motion/react";
@@ -41,6 +42,62 @@ import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useRouter } from "next/navigation";
 
 const emptyArray: BattleResult[] = [];
+
+// Helper function to calculate average relevance score
+const calculateAverageRelevanceScore = (results: SearchResult[]) => {
+  const scores = results
+    .map((item) => item.score)
+    .filter(
+      (score): score is number => score !== undefined && score !== null && !isNaN(score)
+    );
+
+  if (scores.length === 0) return 0;
+  const average =
+    scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  return average;
+};
+
+// Helper function to calculate average search timing
+const calculateAverageSearchTiming = (battle: BattleResult) => {
+  if (!battle.queries || battle.queries.length === 0) {
+    return { db1AvgTiming: 0, db2AvgTiming: 0 };
+  }
+
+  let db1TotalTiming = 0;
+  let db2TotalTiming = 0;
+  let db1QueryCount = 0;
+  let db2QueryCount = 0;
+
+  battle.queries.forEach((query) => {
+    const db1Result = query.results.find(
+      (r) => r.databaseId === battle.databaseId1
+    );
+    const db2Result = query.results.find(
+      (r) => r.databaseId === battle.databaseId2
+    );
+
+    if (db1Result && db1Result.searchDuration) {
+      const timing = parseFloat(db1Result.searchDuration);
+      if (!isNaN(timing) && timing > 0) {
+        db1TotalTiming += timing;
+        db1QueryCount++;
+      }
+    }
+
+    if (db2Result && db2Result.searchDuration) {
+      const timing = parseFloat(db2Result.searchDuration);
+      if (!isNaN(timing) && timing > 0) {
+        db2TotalTiming += timing;
+        db2QueryCount++;
+      }
+    }
+  });
+
+  const db1AvgTiming = db1QueryCount > 0 ? db1TotalTiming / db1QueryCount : 0;
+  const db2AvgTiming = db2QueryCount > 0 ? db2TotalTiming / db2QueryCount : 0;
+
+  return { db1AvgTiming, db2AvgTiming };
+};
 
 const useBattleTable = ({
   handleEditBattle,
@@ -161,55 +218,193 @@ const useBattleTable = ({
           const battle = row.original;
           return (
             <span className="text-sm text-gray-700">
-              {battle.queries.split("\n").length}
+              {battle.queries?.length || 0}
             </span>
           );
         },
       },
       {
         accessorKey: "results",
-        header: "Results",
+        header: () => (
+          <SimpleTooltip content="Average relevance scores (0.00-1.00) from search providers">
+            <div className="flex items-center gap-1 cursor-help">
+              <span>Avg Relevance</span>
+              <Badge variant="outline" className="text-xs px-1 py-0">0-1</Badge>
+            </div>
+          </SimpleTooltip>
+        ),
+        sortingFn: (rowA, rowB) => {
+          const battleA = rowA.original;
+          const battleB = rowB.original;
+
+          if (battleA.status !== "completed" || !battleA.queries || battleA.queries.length === 0) return 1;
+          if (battleB.status !== "completed" || !battleB.queries || battleB.queries.length === 0) return -1;
+
+          // Calculate average relevance for both battles
+          const calculateBattleAvgRelevance = (battle: BattleResult) => {
+            let db1TotalRelevance = 0;
+            let db2TotalRelevance = 0;
+            let db1QueryCount = 0;
+            let db2QueryCount = 0;
+
+            battle.queries.forEach((query) => {
+              const db1Result = query.results.find((r) => r.databaseId === battle.databaseId1);
+              const db2Result = query.results.find((r) => r.databaseId === battle.databaseId2);
+
+              if (db1Result) {
+                const avgRelevance = calculateAverageRelevanceScore(db1Result.results as SearchResult[]);
+                if (avgRelevance > 0) {
+                  db1TotalRelevance += avgRelevance;
+                  db1QueryCount++;
+                }
+              }
+
+              if (db2Result) {
+                const avgRelevance = calculateAverageRelevanceScore(db2Result.results as SearchResult[]);
+                if (avgRelevance > 0) {
+                  db2TotalRelevance += avgRelevance;
+                  db2QueryCount++;
+                }
+              }
+            });
+
+            const db1AvgRelevance = db1QueryCount > 0 ? db1TotalRelevance / db1QueryCount : 0;
+            const db2AvgRelevance = db2QueryCount > 0 ? db2TotalRelevance / db2QueryCount : 0;
+            return Math.max(db1AvgRelevance, db2AvgRelevance);
+          };
+
+          const relevanceA = calculateBattleAvgRelevance(battleA);
+          const relevanceB = calculateBattleAvgRelevance(battleB);
+
+          return relevanceB - relevanceA; // Higher relevance first
+        },
         cell: ({ row }) => {
           const battle = row.original;
-          const score1 = battle.meanScoreDb1
-            ? parseFloat(battle.meanScoreDb1)
-            : 0;
-          const score2 = battle.meanScoreDb2
-            ? parseFloat(battle.meanScoreDb2)
-            : 0;
 
-          if (
-            battle.status !== "completed" ||
-            battle.meanScoreDb1 === null ||
-            battle.meanScoreDb1 === undefined ||
-            battle.meanScoreDb2 === null ||
-            battle.meanScoreDb2 === undefined
-          ) {
+          if (battle.status !== "completed" || !battle.queries || battle.queries.length === 0) {
             return <span className="text-xs text-gray-400">-</span>;
           }
 
-          // Check if both scores are -1 (LLM disabled)
-          const isLLMDisabled = score1 === -1 && score2 === -1;
+          // Calculate average relevance scores for both databases
+          let db1TotalRelevance = 0;
+          let db2TotalRelevance = 0;
+          let db1QueryCount = 0;
+          let db2QueryCount = 0;
+
+          battle.queries.forEach((query) => {
+            const db1Result = query.results.find(
+              (r) => r.databaseId === battle.databaseId1
+            );
+            const db2Result = query.results.find(
+              (r) => r.databaseId === battle.databaseId2
+            );
+
+            if (db1Result) {
+              const avgRelevance = calculateAverageRelevanceScore(db1Result.results as SearchResult[]);
+              if (avgRelevance > 0) {
+                db1TotalRelevance += avgRelevance;
+                db1QueryCount++;
+              }
+            }
+
+            if (db2Result) {
+              const avgRelevance = calculateAverageRelevanceScore(db2Result.results as SearchResult[]);
+              if (avgRelevance > 0) {
+                db2TotalRelevance += avgRelevance;
+                db2QueryCount++;
+              }
+            }
+          });
+
+          const db1AvgRelevance = db1QueryCount > 0 ? db1TotalRelevance / db1QueryCount : 0;
+          const db2AvgRelevance = db2QueryCount > 0 ? db2TotalRelevance / db2QueryCount : 0;
+
+          // Check if both scores are 0 (no relevance data)
+          const isRelevanceDisabled = db1AvgRelevance === 0 && db2AvgRelevance === 0;
 
           return (
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-1">
                 <span className="text-sm font-bold text-blue-600">
-                  {score1 === -1 ? "-" : battle.meanScoreDb1}
+                  {db1AvgRelevance > 0 ? db1AvgRelevance.toFixed(2) : "-"}
                 </span>
-                {!isLLMDisabled && score1 > score2 && (
+                {!isRelevanceDisabled && db1AvgRelevance > db2AvgRelevance && (
                   <Trophy className="h-3 w-3 text-yellow-500" />
                 )}
               </div>
               <span className="text-xs text-gray-400">vs</span>
               <div className="flex items-center space-x-1">
                 <span className="text-sm font-bold text-green-600">
-                  {score2 === -1 ? "-" : battle.meanScoreDb2}
+                  {db2AvgRelevance > 0 ? db2AvgRelevance.toFixed(2) : "-"}
                 </span>
-                {!isLLMDisabled && score2 > score1 && (
+                {!isRelevanceDisabled && db2AvgRelevance > db1AvgRelevance && (
                   <Trophy className="h-3 w-3 text-yellow-500" />
                 )}
-                {!isLLMDisabled && score1 === score2 && (
+                {!isRelevanceDisabled && db1AvgRelevance === db2AvgRelevance && (
+                  <Trophy className="h-3 w-3 text-gray-400" />
+                )}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "searchTiming",
+        header: () => (
+          <SimpleTooltip content="Average search response times in milliseconds">
+            <div className="flex items-center gap-1 cursor-help">
+              <span>Avg Timing</span>
+              <Badge variant="outline" className="text-xs px-1 py-0">ms</Badge>
+            </div>
+          </SimpleTooltip>
+        ),
+        sortingFn: (rowA, rowB) => {
+          const battleA = rowA.original;
+          const battleB = rowB.original;
+
+          if (battleA.status !== "completed" || !battleA.queries || battleA.queries.length === 0) return 1;
+          if (battleB.status !== "completed" || !battleB.queries || battleB.queries.length === 0) return -1;
+
+          const timingA = calculateAverageSearchTiming(battleA);
+          const timingB = calculateAverageSearchTiming(battleB);
+
+          // Use the faster (lower) timing for comparison
+          const fastestA = Math.min(timingA.db1AvgTiming || Infinity, timingA.db2AvgTiming || Infinity);
+          const fastestB = Math.min(timingB.db1AvgTiming || Infinity, timingB.db2AvgTiming || Infinity);
+
+          return fastestA - fastestB; // Faster timing first
+        },
+        cell: ({ row }) => {
+          const battle = row.original;
+
+          if (battle.status !== "completed" || !battle.queries || battle.queries.length === 0) {
+            return <span className="text-xs text-gray-400">-</span>;
+          }
+
+          const { db1AvgTiming, db2AvgTiming } = calculateAverageSearchTiming(battle);
+
+          // Check if both timings are 0 (no timing data)
+          const isTimingDisabled = db1AvgTiming === 0 && db2AvgTiming === 0;
+
+          return (
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-1">
+                <span className="text-sm font-bold text-blue-600">
+                  {db1AvgTiming > 0 ? `${db1AvgTiming.toFixed(0)}ms` : "-"}
+                </span>
+                {!isTimingDisabled && db1AvgTiming < db2AvgTiming && (
+                  <Trophy className="h-3 w-3 text-yellow-500" />
+                )}
+              </div>
+              <span className="text-xs text-gray-400">vs</span>
+              <div className="flex items-center space-x-1">
+                <span className="text-sm font-bold text-green-600">
+                  {db2AvgTiming > 0 ? `${db2AvgTiming.toFixed(0)}ms` : "-"}
+                </span>
+                {!isTimingDisabled && db2AvgTiming < db1AvgTiming && (
+                  <Trophy className="h-3 w-3 text-yellow-500" />
+                )}
+                {!isTimingDisabled && db1AvgTiming === db2AvgTiming && (
                   <Trophy className="h-3 w-3 text-gray-400" />
                 )}
               </div>
