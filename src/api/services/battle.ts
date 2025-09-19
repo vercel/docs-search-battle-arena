@@ -299,6 +299,11 @@ export class BattleService {
             provider: true,
           },
         },
+        queries: {
+          with: {
+            results: true,
+          },
+        },
       },
     });
   }

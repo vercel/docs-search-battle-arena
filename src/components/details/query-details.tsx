@@ -34,6 +34,25 @@ export function QueryDetails({
     return average;
   };
 
+  // Calculate average relevance scores for both databases
+  const getAverageRelevanceScores = () => {
+    const db1Result = selectedQuery.results.find(
+      (r) => r.databaseId === battle.databaseId1
+    );
+    const db2Result = selectedQuery.results.find(
+      (r) => r.databaseId === battle.databaseId2
+    );
+
+    const db1AvgRelevance = db1Result 
+      ? calculateAverageRelevanceScore(db1Result.results as SearchResult[])
+      : null;
+    const db2AvgRelevance = db2Result 
+      ? calculateAverageRelevanceScore(db2Result.results as SearchResult[])
+      : null;
+
+    return { db1AvgRelevance, db2AvgRelevance };
+  };
+
   return (
     <motion.div
       className="flex-grow overflow-y-auto border rounded bg-white"
