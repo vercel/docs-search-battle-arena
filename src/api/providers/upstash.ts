@@ -94,15 +94,37 @@ export class UpstashSearchProvider implements SearchProvider {
 
       // Transform Upstash search results to the common SearchResult format
       const transformedResults = searchResults.map((result) => {
+        // Debug: Log the actual result structure
+        console.log("Upstash search result:", JSON.stringify(result, null, 2));
+        console.log("Upstash result keys:", Object.keys(result));
+        console.log("Upstash result score field:", result.score);
+        console.log("Upstash result score type:", typeof result.score);
+        
+        // Try different ways to access the score
+        const score1 = result.score;
+        const score2 = (result as Record<string, unknown>).score;
+        const score3 = result['score'];
+        console.log("Score access methods:", { score1, score2, score3 });
+        
         // Extract the document content and metadata
-        const { id, content, score, metadata } = result;
+        const { id, content, metadata } = result;
+        const score = Number(result.score || (result as Record<string, unknown>).score || 0);
+
+        // Handle URL with proper type checking
+        let url = "No URL available";
+        if (metadata?.url) {
+          const urlString = String(metadata.url);
+          url = urlString.startsWith('https://vercel.com') 
+            ? urlString 
+            : `https://vercel.com${urlString}`;
+        }
 
         return {
           id,
           title: content.title ?? "Untitled",
           description: content.description ?? "No description available",
-          url: metadata?.url ? `https://vercel.com${metadata.url}` : "No URL available",
-          score: score || 0,
+          url: url,
+          score: score,
         };
       });
 
