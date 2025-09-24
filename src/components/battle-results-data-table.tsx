@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   AlertTriangle,
+  BarChart3,
   Clock,
   Edit,
   Loader2,
@@ -40,10 +41,11 @@ import { motion, AnimatePresence } from "motion/react";
 import { BattleSetupModal } from "./battle-setup-modal";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useRouter } from "next/navigation";
+import { StructuredScoringCell, createMockStructuredScoresFromBattle } from "./battle-results-structured-scoring";
 
 const emptyArray: BattleResult[] = [];
 
-// Helper function to calculate average relevance score
+// Helper function to calculate average relevance score from stored scores
 const calculateAverageRelevanceScore = (results: SearchResult[]) => {
   const scores = results
     .map((item) => item.score)
@@ -103,18 +105,19 @@ const useBattleTable = ({
   handleEditBattle,
   handleDeleteBattle,
   isDemo,
+  showDetailedColumns = false,
 }: {
   handleEditBattle: (id: string) => void;
   handleDeleteBattle: (id: string) => void;
   isDemo: boolean;
+  showDetailedColumns?: boolean;
 }) => {
   const { isAdmin } = useIsAdmin();
   const { data: battleResults = emptyArray } = trpc.battle.getAll.useQuery({
     isDemo,
   });
 
-  const columns: ColumnDef<BattleResult>[] = useMemo(
-    () => [
+  const getBaseColumns = (): ColumnDef<BattleResult>[] => [
       {
         accessorKey: "status",
         header: "Status",
@@ -299,18 +302,19 @@ const useBattleTable = ({
               (r) => r.databaseId === battle.databaseId2
             );
 
-            if (db1Result) {
-              const avgRelevance = calculateAverageRelevanceScore(db1Result.results as SearchResult[]);
-              if (avgRelevance > 0) {
-                db1TotalRelevance += avgRelevance;
+            // Use the stored score from the database, not calculate from individual results
+            if (db1Result?.score) {
+              const score = parseFloat(db1Result.score);
+              if (!isNaN(score) && score > 0) {
+                db1TotalRelevance += score;
                 db1QueryCount++;
               }
             }
 
-            if (db2Result) {
-              const avgRelevance = calculateAverageRelevanceScore(db2Result.results as SearchResult[]);
-              if (avgRelevance > 0) {
-                db2TotalRelevance += avgRelevance;
+            if (db2Result?.score) {
+              const score = parseFloat(db2Result.score);
+              if (!isNaN(score) && score > 0) {
+                db2TotalRelevance += score;
                 db2QueryCount++;
               }
             }
@@ -319,8 +323,17 @@ const useBattleTable = ({
           const db1AvgRelevance = db1QueryCount > 0 ? db1TotalRelevance / db1QueryCount : 0;
           const db2AvgRelevance = db2QueryCount > 0 ? db2TotalRelevance / db2QueryCount : 0;
 
-          // Check if both scores are 0 (no relevance data)
+          // Check if LLM comparison is disabled or both scores are 0 (no relevance data)
+          const isLLMDisabled = battle.useLlmComparison === false;
           const isRelevanceDisabled = db1AvgRelevance === 0 && db2AvgRelevance === 0;
+
+          if (isLLMDisabled) {
+            return (
+              <div className="flex items-center justify-center">
+                <span className="text-sm text-gray-400">N/A</span>
+              </div>
+            );
+          }
 
           return (
             <div className="flex items-center space-x-4">
@@ -345,6 +358,61 @@ const useBattleTable = ({
                 )}
               </div>
             </div>
+          );
+        },
+      },
+      {
+        accessorKey: "structuredScoring",
+        header: () => (
+          <SimpleTooltip content="Structured relevance analysis across multiple dimensions">
+            <div className="flex items-center gap-1 cursor-help">
+              <span>Structured Analysis</span>
+              <Badge variant="outline" className="text-xs px-1 py-0">3D</Badge>
+            </div>
+          </SimpleTooltip>
+        ),
+        sortingFn: (rowA, rowB) => {
+          const battleA = rowA.original;
+          const battleB = rowB.original;
+
+          if (battleA.status !== "completed" || !battleA.queries || battleA.queries.length === 0) return 1;
+          if (battleB.status !== "completed" || !battleB.queries || battleB.queries.length === 0) return -1;
+
+          const scoresA = createMockStructuredScoresFromBattle(battleA);
+          const scoresB = createMockStructuredScoresFromBattle(battleB);
+
+          // Use the higher overall score for comparison
+          const maxScoreA = Math.max(scoresA.db1.overallScore, scoresA.db2.overallScore);
+          const maxScoreB = Math.max(scoresB.db1.overallScore, scoresB.db2.overallScore);
+
+          return maxScoreB - maxScoreA; // Higher score first
+        },
+        cell: ({ row }) => {
+          const battle = row.original;
+
+          if (battle.status !== "completed" || !battle.queries || battle.queries.length === 0) {
+            return <span className="text-xs text-gray-400">-</span>;
+          }
+
+          // Show N/A if LLM comparison is disabled
+          if (battle.useLlmComparison === false) {
+            return (
+              <div className="flex items-center justify-center">
+                <span className="text-sm text-gray-400">N/A</span>
+              </div>
+            );
+          }
+
+          const structuredScores = createMockStructuredScoresFromBattle(battle);
+
+          return (
+            <StructuredScoringCell
+              db1Scores={structuredScores.db1}
+              db2Scores={structuredScores.db2}
+              db1Label={battle.database1.label}
+              db2Label={battle.database2.label}
+              compact={true}
+            />
           );
         },
       },
@@ -456,8 +524,130 @@ const useBattleTable = ({
           );
         },
       },
-    ],
-    [isDemo, isAdmin, handleEditBattle, handleDeleteBattle]
+    ];
+
+  const getDetailedColumns = (): ColumnDef<BattleResult>[] => [
+    {
+      accessorKey: "topicalRelevance",
+      header: () => (
+        <SimpleTooltip content="How well results match the query topic">
+          <div className="flex items-center gap-1 cursor-help">
+            <span>Topical</span>
+            <Badge variant="outline" className="text-xs px-1 py-0">0-10</Badge>
+          </div>
+        </SimpleTooltip>
+      ),
+      sortingFn: (rowA, rowB) => {
+        const battleA = rowA.original;
+        const battleB = rowB.original;
+
+        if (battleA.status !== "completed" || !battleA.queries || battleA.queries.length === 0) return 1;
+        if (battleB.status !== "completed" || !battleB.queries || battleB.queries.length === 0) return -1;
+
+        const scoresA = createMockStructuredScoresFromBattle(battleA);
+        const scoresB = createMockStructuredScoresFromBattle(battleB);
+
+        const maxTopicalA = Math.max(scoresA.db1.topicalRelevance, scoresA.db2.topicalRelevance);
+        const maxTopicalB = Math.max(scoresB.db1.topicalRelevance, scoresB.db2.topicalRelevance);
+
+        return maxTopicalB - maxTopicalA;
+      },
+      cell: ({ row }) => {
+        const battle = row.original;
+
+        if (battle.status !== "completed" || !battle.queries || battle.queries.length === 0) {
+          return <span className="text-xs text-gray-400">-</span>;
+        }
+
+        const structuredScores = createMockStructuredScoresFromBattle(battle);
+        const db1Score = structuredScores.db1.topicalRelevance;
+        const db2Score = structuredScores.db2.topicalRelevance;
+
+        return (
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
+              <span className="text-sm font-bold text-blue-600">
+                {db1Score.toFixed(1)}
+              </span>
+              {db1Score > db2Score && <Trophy className="h-3 w-3 text-yellow-500" />}
+            </div>
+            <span className="text-xs text-gray-400">vs</span>
+            <div className="flex items-center space-x-1">
+              <span className="text-sm font-bold text-green-600">
+                {db2Score.toFixed(1)}
+              </span>
+              {db2Score > db1Score && <Trophy className="h-3 w-3 text-yellow-500" />}
+              {db1Score === db2Score && <Trophy className="h-3 w-3 text-gray-400" />}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "contentQuality",
+      header: () => (
+        <SimpleTooltip content="Content comprehensiveness and accuracy">
+          <div className="flex items-center gap-1 cursor-help">
+            <span>Content</span>
+            <Badge variant="outline" className="text-xs px-1 py-0">0-10</Badge>
+          </div>
+        </SimpleTooltip>
+      ),
+      sortingFn: (rowA, rowB) => {
+        const battleA = rowA.original;
+        const battleB = rowB.original;
+
+        if (battleA.status !== "completed" || !battleA.queries || battleA.queries.length === 0) return 1;
+        if (battleB.status !== "completed" || !battleB.queries || battleB.queries.length === 0) return -1;
+
+        const scoresA = createMockStructuredScoresFromBattle(battleA);
+        const scoresB = createMockStructuredScoresFromBattle(battleB);
+
+        const maxContentA = Math.max(scoresA.db1.contentQuality, scoresA.db2.contentQuality);
+        const maxContentB = Math.max(scoresB.db1.contentQuality, scoresB.db2.contentQuality);
+
+        return maxContentB - maxContentA;
+      },
+      cell: ({ row }) => {
+        const battle = row.original;
+
+        if (battle.status !== "completed" || !battle.queries || battle.queries.length === 0) {
+          return <span className="text-xs text-gray-400">-</span>;
+        }
+
+        const structuredScores = createMockStructuredScoresFromBattle(battle);
+        const db1Score = structuredScores.db1.contentQuality;
+        const db2Score = structuredScores.db2.contentQuality;
+
+        return (
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
+              <span className="text-sm font-bold text-blue-600">
+                {db1Score.toFixed(1)}
+              </span>
+              {db1Score > db2Score && <Trophy className="h-3 w-3 text-yellow-500" />}
+            </div>
+            <span className="text-xs text-gray-400">vs</span>
+            <div className="flex items-center space-x-1">
+              <span className="text-sm font-bold text-green-600">
+                {db2Score.toFixed(1)}
+              </span>
+              {db2Score > db1Score && <Trophy className="h-3 w-3 text-yellow-500" />}
+              {db1Score === db2Score && <Trophy className="h-3 w-3 text-gray-400" />}
+            </div>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const columns: ColumnDef<BattleResult>[] = useMemo(
+    () => {
+      const baseColumns = getBaseColumns();
+      const detailedColumns = showDetailedColumns ? getDetailedColumns() : [];
+      return [...baseColumns, ...detailedColumns];
+    },
+    [isDemo, isAdmin, handleEditBattle, handleDeleteBattle, showDetailedColumns]
   );
 
   const table = useReactTable<BattleResult>({
@@ -486,6 +676,7 @@ export default function BattleResultsDataTable({
   const router = useRouter();
   const utils = trpc.useUtils();
   const [shouldRefetch, setShouldRefetch] = useState(false);
+  const [showDetailedColumns, setShowDetailedColumns] = useState(false);
   const { data: battleResults, isLoading } = trpc.battle.getAll.useQuery(
     {
       isDemo,
@@ -494,7 +685,6 @@ export default function BattleResultsDataTable({
       refetchInterval: shouldRefetch ? 4000 : undefined,
     }
   );
-  console.log("isLoading", isLoading);
   useEffect(() => {
     if (isDemo) return;
 
@@ -513,6 +703,7 @@ export default function BattleResultsDataTable({
       databaseId1: string;
       databaseId2: string;
       queries: string;
+      useLlmComparison?: boolean;
     } | null;
   }>({
     open: false,
@@ -532,6 +723,7 @@ export default function BattleResultsDataTable({
     (id: string) => {
       const battle = battleResults?.find((b) => b.id === id);
       if (battle) {
+        
         // Convert queries array to string format for the modal
         const queriesString = Array.isArray(battle.queries) 
           ? battle.queries.map(q => q.queryText).join('\n')
@@ -544,6 +736,7 @@ export default function BattleResultsDataTable({
             databaseId1: battle.databaseId1,
             databaseId2: battle.databaseId2,
             queries: queriesString,
+            useLlmComparison: battle.useLlmComparison !== false, // Default to true for backward compatibility
           },
         });
       }
@@ -569,6 +762,7 @@ export default function BattleResultsDataTable({
     handleEditBattle,
     handleDeleteBattle,
     isDemo,
+    showDetailedColumns,
   });
 
   return (
@@ -590,6 +784,14 @@ export default function BattleResultsDataTable({
           />
 
           <div className="flex items-center space-x-2">
+            <Button
+              variant={showDetailedColumns ? "default" : "outline"}
+              onClick={() => setShowDetailedColumns(!showDetailedColumns)}
+              className="flex items-center gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              {showDetailedColumns ? 'Hide' : 'Show'} Details
+            </Button>
             <Button variant="outline" onClick={handleNewBattle}>
               <Plus /> New Battle
             </Button>

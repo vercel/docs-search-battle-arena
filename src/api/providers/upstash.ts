@@ -85,20 +85,23 @@ export class UpstashSearchProvider implements SearchProvider {
       );
 
       // Perform the search
-      const searchResults = await index.search({
+
+      const options = {
         query,
         limit: 10,
         reranking: this.credentials.reranking,
         inputEnrichment: this.credentials.inputEnrichment,
-      });
+        filter: {
+          title: { notGlob: "*pages*" },
+        },
+      }
+
+      console.log("Upstash search options:", options);
+
+      const searchResults = await index.search(options);
 
       // Transform Upstash search results to the common SearchResult format
       const transformedResults = searchResults.map((result) => {
-        // Debug: Log the actual result structure
-        console.log("Upstash search result:", JSON.stringify(result, null, 2));
-        console.log("Upstash result keys:", Object.keys(result));
-        console.log("Upstash result score field:", result.score);
-        console.log("Upstash result score type:", typeof result.score);
         
         // Try different ways to access the score
         const score1 = result.score;

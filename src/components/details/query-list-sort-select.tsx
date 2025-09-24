@@ -65,18 +65,19 @@ export function QueryListSortSelect({
 }
 
 // Helper function to calculate average relevance score
-const calculateAverageRelevanceScore = (results: SearchResult[]) => {
-  const scores = results
-    .map((item) => item.score)
-    .filter(
-      (score): score is number => score !== undefined && score !== null && !isNaN(score)
-    );
+// This function is no longer used - we use stored scores directly
+// const calculateAverageRelevanceScore = (results: SearchResult[]) => {
+//   const scores = results
+//     .map((item) => item.score)
+//     .filter(
+//       (score): score is number => score !== undefined && score !== null && !isNaN(score)
+//     );
 
-  if (scores.length === 0) return 0;
-  const average =
-    scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  return average;
-};
+//   if (scores.length === 0) return 0;
+//   const average =
+//     scores.reduce((sum, score) => sum + score, 0) / scores.length;
+//   return average;
+// };
 
 export function sortQueryResults({
   queries,
@@ -106,11 +107,11 @@ export function sortQueryResults({
       return 0;
     }
 
-    // Calculate average relevance scores
-    const aDb1AvgRelevance = calculateAverageRelevanceScore(aDb1Result.results as SearchResult[]);
-    const aDb2AvgRelevance = calculateAverageRelevanceScore(aDb2Result.results as SearchResult[]);
-    const bDb1AvgRelevance = calculateAverageRelevanceScore(bDb1Result.results as SearchResult[]);
-    const bDb2AvgRelevance = calculateAverageRelevanceScore(bDb2Result.results as SearchResult[]);
+    // Use stored scores from the database
+    const aDb1AvgRelevance = aDb1Result.score ? parseFloat(aDb1Result.score) : 0;
+    const aDb2AvgRelevance = aDb2Result.score ? parseFloat(aDb2Result.score) : 0;
+    const bDb1AvgRelevance = bDb1Result.score ? parseFloat(bDb1Result.score) : 0;
+    const bDb2AvgRelevance = bDb2Result.score ? parseFloat(bDb2Result.score) : 0;
 
     switch (sortBy) {
       case "db1-score":

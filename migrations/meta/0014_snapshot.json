@@ -1,0 +1,448 @@
+{
+  "id": "df55b6ce-f7ba-4536-be75-e7ecce151c3e",
+  "prevId": "43328c00-84ad-43f7-a317-bc228f1b9fcb",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.battle_queries": {
+      "name": "battle_queries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "battle_id": {
+          "name": "battle_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "query_text": {
+          "name": "query_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quality_winner": {
+          "name": "quality_winner",
+          "type": "numeric(1, 0)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "battle_queries_battle_id_battles_id_fk": {
+          "name": "battle_queries_battle_id_battles_id_fk",
+          "tableFrom": "battle_queries",
+          "tableTo": "battles",
+          "columnsFrom": [
+            "battle_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.battles": {
+      "name": "battles",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "label": {
+          "name": "label",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "database_id_1": {
+          "name": "database_id_1",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "database_id_2": {
+          "name": "database_id_2",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "queries": {
+          "name": "queries",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "battle_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mean_score_db1": {
+          "name": "mean_score_db1",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mean_score_db2": {
+          "name": "mean_score_db2",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_demo": {
+          "name": "is_demo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "use_llm_comparison": {
+          "name": "use_llm_comparison",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        }
+      },
+      "indexes": {
+        "session_id_idx": {
+          "name": "session_id_idx",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "is_demo_idx": {
+          "name": "is_demo_idx",
+          "columns": [
+            {
+              "expression": "is_demo",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "battles_database_id_1_databases_id_fk": {
+          "name": "battles_database_id_1_databases_id_fk",
+          "tableFrom": "battles",
+          "tableTo": "databases",
+          "columnsFrom": [
+            "database_id_1"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "battles_database_id_2_databases_id_fk": {
+          "name": "battles_database_id_2_databases_id_fk",
+          "tableFrom": "battles",
+          "tableTo": "databases",
+          "columnsFrom": [
+            "database_id_2"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.databases": {
+      "name": "databases",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "label": {
+          "name": "label",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "provider_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credentials": {
+          "name": "credentials",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.search_results": {
+      "name": "search_results",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "battle_query_id": {
+          "name": "battle_query_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "database_id": {
+          "name": "database_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "results": {
+          "name": "results",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "score": {
+          "name": "score",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "llm_feedback": {
+          "name": "llm_feedback",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "topical_relevance": {
+          "name": "topical_relevance",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "content_quality": {
+          "name": "content_quality",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_intent_match": {
+          "name": "user_intent_match",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "search_duration": {
+          "name": "search_duration",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "llm_duration": {
+          "name": "llm_duration",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_manual_winner": {
+          "name": "is_manual_winner",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "search_results_battle_query_id_battle_queries_id_fk": {
+          "name": "search_results_battle_query_id_battle_queries_id_fk",
+          "tableFrom": "search_results",
+          "tableTo": "battle_queries",
+          "columnsFrom": [
+            "battle_query_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "search_results_database_id_databases_id_fk": {
+          "name": "search_results_database_id_databases_id_fk",
+          "tableFrom": "search_results",
+          "tableTo": "databases",
+          "columnsFrom": [
+            "database_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "search_results_battle_query_id_database_id_unique": {
+          "name": "search_results_battle_query_id_database_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "battle_query_id",
+            "database_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.battle_status": {
+      "name": "battle_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "in_progress",
+        "completed",
+        "failed"
+      ]
+    },
+    "public.provider_type": {
+      "name": "provider_type",
+      "schema": "public",
+      "values": [
+        "algolia",
+        "upstash_search",
+        "mixedbread_search"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "battle_queries" ADD COLUMN "quality_winner" numeric(1, 0);

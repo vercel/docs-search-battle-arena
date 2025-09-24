@@ -18,7 +18,8 @@ export class BattleService {
     databaseId1: string,
     databaseId2: string,
     queries: string,
-    sessionId?: string
+    sessionId?: string,
+    useLlmComparison: boolean = true
   ) {
     // Create the battle record
     const [battle] = await db
@@ -30,6 +31,7 @@ export class BattleService {
         status: "pending",
         queries,
         sessionId,
+        useLlmComparison,
       })
       .returning();
 
@@ -137,24 +139,54 @@ export class BattleService {
         console.log("> " + provider1.name, search1.results.at(0));
         console.log("> " + provider2.name, search2.results.at(0));
 
-        // Evaluate results with LLM (timing is handled inside the LLM service)
-        console.log(`Evaluating results for query:`, query.queryText);
-        const { db1, db2, llmDuration } =
-          await this.llmService.evaluateSearchResults(
+        let db1, db2, llmDuration = 0;
+
+        // Conditionally evaluate results with LLM
+        if (battle.useLlmComparison) {
+          console.log(`Evaluating results for query:`, query.queryText);
+          const evaluation = await this.llmService.evaluateSearchResultsWithContent(
             query.queryText,
             search1.results,
             search2.results
           );
+          db1 = evaluation.db1;
+          db2 = evaluation.db2;
+          llmDuration = evaluation.llmDuration;
+        } else {
+          // For non-LLM battles, create default scores based on latency
+          const latencyScore1 = Math.max(1, Math.min(10, 10 - (search1.duration / 1000))); // Convert to seconds and invert
+          const latencyScore2 = Math.max(1, Math.min(10, 10 - (search2.duration / 1000)));
+          
+          db1 = {
+            topicalRelevance: latencyScore1,
+            contentQuality: latencyScore1,
+            userIntentMatch: latencyScore1,
+            overallScore: latencyScore1,
+            detailedFeedback: `Latency-based scoring: ${search1.duration.toFixed(2)}ms`,
+          };
+          
+          db2 = {
+            topicalRelevance: latencyScore2,
+            contentQuality: latencyScore2,
+            userIntentMatch: latencyScore2,
+            overallScore: latencyScore2,
+            detailedFeedback: `Latency-based scoring: ${search2.duration.toFixed(2)}ms`,
+          };
+        }
 
-        // Store results with timing information
+        // Store results with timing information and structured scores
         await db
           .insert(schema.searchResults)
           .values({
             battleQueryId: query.id,
             databaseId: battle.databaseId1,
             results: search1.results,
-            score: String(db1.score), // Convert to string for Drizzle compatibility
-            llmFeedback: db1.feedback,
+            score: String(db1.overallScore), // Use overall score for backward compatibility
+            llmFeedback: db1.detailedFeedback,
+            // Store structured scores
+            topicalRelevance: String(db1.topicalRelevance),
+            contentQuality: String(db1.contentQuality),
+            userIntentMatch: String(db1.userIntentMatch),
             searchDuration: String(search1.duration.toFixed(2)),
             llmDuration: String(llmDuration.toFixed(2)),
           })
@@ -166,15 +198,19 @@ export class BattleService {
             battleQueryId: query.id,
             databaseId: battle.databaseId2,
             results: search2.results,
-            score: String(db2.score), // Convert to string for Drizzle compatibility
-            llmFeedback: db2.feedback,
+            score: String(db2.overallScore), // Use overall score for backward compatibility
+            llmFeedback: db2.detailedFeedback,
+            // Store structured scores
+            topicalRelevance: String(db2.topicalRelevance),
+            contentQuality: String(db2.contentQuality),
+            userIntentMatch: String(db2.userIntentMatch),
             searchDuration: String(search2.duration.toFixed(2)),
             llmDuration: String(llmDuration.toFixed(2)),
           })
           .execute();
 
-        totalScoreDb1 += db1.score;
-        totalScoreDb2 += db2.score;
+        totalScoreDb1 += db1.overallScore;
+        totalScoreDb2 += db2.overallScore;
       };
 
       await Promise.all(
@@ -438,6 +474,112 @@ export class BattleService {
       .set({ isDemo })
       .where(eq(schema.battles.id, battleId))
       .execute();
+  }
+
+  /**
+   * Set manual winner for a specific query and database
+   */
+  async setManualWinner(
+    battleQueryId: string,
+    databaseId: string,
+    isWinner: boolean
+  ) {
+    // First, clear any existing winners for this query
+    await db
+      .update(schema.searchResults)
+      .set({ isManualWinner: false })
+      .where(eq(schema.searchResults.battleQueryId, battleQueryId))
+      .execute();
+
+    // Set the new winner if isWinner is true
+    if (isWinner) {
+      await db
+        .update(schema.searchResults)
+        .set({ isManualWinner: true })
+        .where(
+          and(
+            eq(schema.searchResults.battleQueryId, battleQueryId),
+            eq(schema.searchResults.databaseId, databaseId)
+          )
+        )
+        .execute();
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Set quality winner for a specific query (0 = database1, 1 = database2, -1 = clear)
+   */
+  async setQualityWinner(
+    battleQueryId: string,
+    qualityWinner: number
+  ) {
+    const value = qualityWinner === -1 ? null : String(qualityWinner);
+    
+    await db
+      .update(schema.battleQueries)
+      .set({ qualityWinner: value })
+      .where(eq(schema.battleQueries.id, battleQueryId))
+      .execute();
+
+    return { success: true };
+  }
+
+  /**
+   * Get detailed structured evaluation results for a battle
+   */
+  async getBattleDetailedResults(battleId: string, sessionId?: string) {
+    // First get the battle to get database IDs
+    const battle = await db.query.battles.findFirst({
+      where: eq(schema.battles.id, battleId),
+    });
+
+    if (!battle) {
+      throw new Error(`Battle ${battleId} not found`);
+    }
+
+    // If sessionId is provided and battle has a sessionId, verify they match
+    if (sessionId && battle.sessionId && battle.sessionId !== sessionId) {
+      throw new Error(`Battle ${battleId} not found`);
+    }
+
+    const queries = await db.query.battleQueries.findMany({
+      where: eq(schema.battleQueries.battleId, battleId),
+      with: {
+        results: {
+          with: {
+            database: true,
+          },
+        },
+      },
+    });
+
+    return queries.map((query) => {
+      const db1Result = query.results.find(
+        (r) => r.databaseId === battle.databaseId1
+      );
+      const db2Result = query.results.find(
+        (r) => r.databaseId === battle.databaseId2
+      );
+
+      return {
+        queryId: query.id,
+        queryText: query.queryText,
+        database1: {
+          id: battle.databaseId1,
+          score: db1Result?.score || null,
+          results: db1Result?.results || [],
+          feedback: db1Result?.llmFeedback || null,
+        },
+        database2: {
+          id: battle.databaseId2,
+          score: db2Result?.score || null,
+          results: db2Result?.results || [],
+          feedback: db2Result?.llmFeedback || null,
+        },
+      };
+    });
   }
 
   /**
