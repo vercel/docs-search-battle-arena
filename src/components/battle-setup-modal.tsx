@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/api/trpc/client";
 import { Loader2Icon } from "lucide-react";
 
@@ -30,6 +31,7 @@ interface BattleSetupModalProps {
     databaseId1: string;
     databaseId2: string;
     queries: string;
+    useLlmComparison?: boolean;
   };
 }
 
@@ -39,6 +41,7 @@ type FormData = {
   databaseId1: string;
   databaseId2: string;
   queries: string;
+  useLlmComparison: boolean;
 };
 
 export function BattleSetupModal({
@@ -52,6 +55,7 @@ export function BattleSetupModal({
     handleSubmit,
     reset,
     control,
+    getValues,
     formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
@@ -59,43 +63,50 @@ export function BattleSetupModal({
       databaseId1: initialData?.databaseId1,
       databaseId2: initialData?.databaseId2,
       queries: initialData?.queries,
+      useLlmComparison: initialData?.useLlmComparison ?? true, // Use initial data or default to true
     },
   });
   const { data: databases } = trpc.database.getAll.useQuery();
 
   const memoizedInitialData = useMemo(() => {
+    
     return {
       label: initialData?.label,
       databaseId1: initialData?.databaseId1,
       databaseId2: initialData?.databaseId2,
       queries: initialData?.queries,
+      useLlmComparison: initialData?.useLlmComparison ?? true, // Use initial data or default to true
     };
   }, [
     initialData?.label,
     initialData?.databaseId1,
     initialData?.databaseId2,
     initialData?.queries,
+    initialData?.useLlmComparison,
   ]);
 
   useEffect(() => {
-    // Update the default values
-    reset(memoizedInitialData, {
-      keepValues: true,
-    });
+    
     if (!open) return;
 
-    if (
-      !memoizedInitialData.databaseId1 &&
-      !memoizedInitialData.databaseId2 &&
-      databases?.length === 2
-    ) {
-      reset({
-        databaseId1: databases?.at(0)?.id,
-        databaseId2: databases?.at(1)?.id,
-      });
+    // If we have initial data (editing), use it
+    if (memoizedInitialData.label || memoizedInitialData.databaseId1 || memoizedInitialData.databaseId2) {
+      reset(memoizedInitialData);
     } else {
-      reset();
+      // For new battles, set default values
+      if (databases?.length === 2) {
+        reset({
+          databaseId1: databases?.at(0)?.id,
+          databaseId2: databases?.at(1)?.id,
+          useLlmComparison: true,
+        });
+      } else {
+        reset({
+          useLlmComparison: true,
+        });
+      }
     }
+    
   }, [open, reset, databases, memoizedInitialData]);
 
   const utils = trpc.useUtils();
@@ -108,11 +119,16 @@ export function BattleSetupModal({
     });
 
   const onSubmit: SubmitHandler<FormData> = async (data) => {
+    
+    // Ensure useLlmComparison is always a boolean
+    const useLlmComparison = data.useLlmComparison === true;
+    
     await createBattle({
       label: data.label,
       databaseId1: data.databaseId1,
       databaseId2: data.databaseId2,
       queries: data.queries,
+      useLlmComparison,
     });
   };
 
@@ -230,6 +246,28 @@ export function BattleSetupModal({
                 {errors.queries.message}
               </p>
             )}
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Controller
+              name="useLlmComparison"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="useLlmComparison"
+                  checked={field.value || false}
+                  onCheckedChange={(checked) => {
+                    field.onChange(checked === true);
+                  }}
+                />
+              )}
+            />
+            <Label htmlFor="useLlmComparison" className="text-sm font-medium">
+              Include LLM comparison
+            </Label>
+            <p className="text-xs text-gray-500">
+              When enabled, results will be evaluated by AI. When disabled, only latency will be shown and you can manually select winners.
+            </p>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

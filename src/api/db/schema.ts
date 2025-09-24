@@ -61,6 +61,8 @@ export const battles = pgTable(
     // Session ID to track user's battles
     sessionId: varchar("session_id", { length: 255 }),
     isDemo: boolean("is_demo").default(false),
+    // Whether to use LLM comparison for this battle
+    useLlmComparison: boolean("use_llm_comparison").default(true),
   },
   (table) => {
     return [
@@ -79,6 +81,8 @@ export const battleQueries = pgTable("battle_queries", {
   queryText: text("query_text").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   error: text("error"),
+  // Quality winner: 0 = database1 wins, 1 = database2 wins, null = no selection
+  qualityWinner: decimal("quality_winner", { precision: 1, scale: 0 }),
 });
 
 // Search results table
@@ -95,9 +99,15 @@ export const searchResults = pgTable(
     results: jsonb("results").notNull(),
     score: decimal("score", { precision: 4, scale: 2 }),
     llmFeedback: text("llm_feedback"),
+    // Structured scoring fields
+    topicalRelevance: decimal("topical_relevance", { precision: 4, scale: 2 }),
+    contentQuality: decimal("content_quality", { precision: 4, scale: 2 }),
+    userIntentMatch: decimal("user_intent_match", { precision: 4, scale: 2 }),
     // Timing information in milliseconds
     searchDuration: decimal("search_duration", { precision: 8, scale: 2 }),
     llmDuration: decimal("llm_duration", { precision: 8, scale: 2 }),
+    // Manual winner selection
+    isManualWinner: boolean("is_manual_winner").default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => {
