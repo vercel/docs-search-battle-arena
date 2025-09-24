@@ -232,6 +232,7 @@ export function StructuredScoringCell({
 }
 
 // Helper function to create mock structured scores from battle data
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createMockStructuredScoresFromBattle(battle: any) {
   if (!battle.queries || battle.queries.length === 0) {
     return {
@@ -254,13 +255,13 @@ export function createMockStructuredScoresFromBattle(battle: any) {
     };
   }
 
-  let db1TotalScores = {
+  const db1TotalScores = {
     topicalRelevance: 0,
     contentQuality: 0,
     userIntentMatch: 0,
     overallScore: 0,
   };
-  let db2TotalScores = {
+  const db2TotalScores = {
     topicalRelevance: 0,
     contentQuality: 0,
     userIntentMatch: 0,
@@ -268,8 +269,11 @@ export function createMockStructuredScoresFromBattle(battle: any) {
   };
   let queryCount = 0;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   battle.queries.forEach((query: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db1Result = query.results.find((r: any) => r.databaseId === battle.databaseId1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db2Result = query.results.find((r: any) => r.databaseId === battle.databaseId2);
 
     if (db1Result && db2Result) {
@@ -277,7 +281,8 @@ export function createMockStructuredScoresFromBattle(battle: any) {
       const db2Overall = parseFloat(db2Result.score || "0");
 
       // Create deterministic mock structured scores based on overall scores
-      const querySeed = query.queryText.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const querySeed = query.queryText.split('').reduce((a: any, b: string) => a + b.charCodeAt(0), 0);
       const db1Seed = querySeed + battle.databaseId1.charCodeAt(0);
       const db2Seed = querySeed + battle.databaseId2.charCodeAt(0);
 

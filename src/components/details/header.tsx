@@ -1,12 +1,11 @@
 import { trpc } from "@/api/trpc/client";
-import { Trophy, TrendingUp, BarChart3 } from "lucide-react";
+import { Trophy, BarChart3 } from "lucide-react";
 import { motion } from "motion/react";
 import { ProviderBadge } from "../provider-badge";
 import { Checkbox } from "../ui/checkbox";
 import { Badge } from "../ui/badge";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { SimpleTooltip } from "../ui/simple-tooltip";
-import { SearchResult } from "@/api/providers/types";
 import { useState } from "react";
 
 // Helper function to calculate average relevance score
@@ -143,13 +142,13 @@ export const BattleHeader = ({ battleId }: { battleId: string }) => {
 
   // Calculate structured scoring averages
   const calculateStructuredAverages = () => {
-    let db1TotalScores = {
+    const db1TotalScores = {
       topicalRelevance: 0,
       contentQuality: 0,
       userIntentMatch: 0,
       overallScore: 0,
     };
-    let db2TotalScores = {
+    const db2TotalScores = {
       topicalRelevance: 0,
       contentQuality: 0,
       userIntentMatch: 0,

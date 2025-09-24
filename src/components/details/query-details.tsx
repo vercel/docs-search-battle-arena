@@ -51,7 +51,8 @@ export function QueryDetails({
   });
 
   // Create structured scores from database or fallback to mock data
-  const createStructuredScores = (result: any, databaseLabel: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const createStructuredScores = (result: any) => {
     const overallScore = result.score ? parseFloat(result.score) : 0;
     const feedback = result.llmFeedback || "No detailed analysis available";
     
@@ -87,10 +88,6 @@ export function QueryDetails({
     };
   };
 
-  const database =
-    selectedQuery.results.at(0)?.databaseId === battle.databaseId1
-      ? battle.database1
-      : battle.database2;
 
   // Calculate average relevance scores for both databases
   const getAverageRelevanceScores = () => {
@@ -216,18 +213,18 @@ export function QueryDetails({
             <StructuredScoringComparison
               db1Scores={createStructuredScores(
                 selectedQuery.results.find(r => r.databaseId === battle.databaseId1),
-                battle.database1.label
               )}
               db2Scores={createStructuredScores(
                 selectedQuery.results.find(r => r.databaseId === battle.databaseId2),
-                battle.database2.label
               )}
               db1Label={battle.database1.label}
               db2Label={battle.database2.label}
               db1Provider={battle.database1.provider}
               db2Provider={battle.database2.provider}
-              db1Results={selectedQuery.results.find(r => r.databaseId === battle.databaseId1)}
-              db2Results={selectedQuery.results.find(r => r.databaseId === battle.databaseId2)}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              db1Results={selectedQuery.results.find(r => r.databaseId === battle.databaseId1) as any}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              db2Results={selectedQuery.results.find(r => r.databaseId === battle.databaseId2) as any}
             />
           </motion.div>
         ) : (
@@ -287,7 +284,8 @@ export function QueryDetails({
                                       }
                                       return query;
                                     }),
-                                  };
+                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                  } as any;
                                 });
                                 
                                 setQualityWinner.mutate({
@@ -311,7 +309,8 @@ export function QueryDetails({
                                       }
                                       return query;
                                     }),
-                                  };
+                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                  } as any;
                                 });
                                 
                                 setQualityWinner.mutate({

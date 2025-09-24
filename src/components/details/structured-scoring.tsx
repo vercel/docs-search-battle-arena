@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { motion } from "motion/react";
@@ -6,9 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Progress } from "../ui/progress";
 import { 
   Target, 
-  FileText, 
-  Shield, 
-  Clock, 
+  FileText,  
   User, 
   TrendingUp,
   Info

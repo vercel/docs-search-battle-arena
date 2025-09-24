@@ -59,6 +59,7 @@ export function QueryItem({
   }
 
   // Create structured scores from database or fallback to mock data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createStructuredScores = (result: any) => {
     const overallScore = result?.score ? parseFloat(result.score) : 0;
     
