@@ -17,7 +17,16 @@ export const createConnection = () => {
 };
 
 // Export a singleton instance for use throughout the application
-export const db = createConnection();
+// Use lazy initialization to avoid errors during build time
+let _db: ReturnType<typeof createConnection> | null = null;
+export const db = new Proxy({} as ReturnType<typeof createConnection>, {
+  get(target, prop) {
+    if (!_db) {
+      _db = createConnection();
+    }
+    return _db[prop as keyof ReturnType<typeof createConnection>];
+  },
+});
 
 // Export schema for use in other files
 export { schema };
