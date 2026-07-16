@@ -477,13 +477,49 @@ export class BattleService {
   }
 
   /**
+   * Loads a battle query together with its parent battle and verifies that the
+   * battle belongs to the caller's session before allowing a mutation.
+   *
+   * Mirrors the ownership convention used by deleteBattle and
+   * getBattleDetailedResults: battles with no sessionId (seeded demo data) are
+   * treated as public, otherwise the session must match.
+   */
+  private async assertBattleQueryOwnership(
+    battleQueryId: string,
+    sessionId?: string
+  ) {
+    const battleQuery = await db.query.battleQueries.findFirst({
+      where: eq(schema.battleQueries.id, battleQueryId),
+      with: { battle: true },
+    });
+
+    if (!battleQuery) {
+      throw new Error(`Battle query ${battleQueryId} not found`);
+    }
+
+    if (
+      sessionId &&
+      battleQuery.battle.sessionId &&
+      battleQuery.battle.sessionId !== sessionId
+    ) {
+      throw new Error(`Battle query ${battleQueryId} not found`);
+    }
+
+    return battleQuery;
+  }
+
+  /**
    * Set manual winner for a specific query and database
    */
   async setManualWinner(
     battleQueryId: string,
     databaseId: string,
-    isWinner: boolean
+    isWinner: boolean,
+    sessionId?: string
   ) {
+    // Verify the query's parent battle belongs to the caller's session
+    await this.assertBattleQueryOwnership(battleQueryId, sessionId);
+
     // First, clear any existing winners for this query
     await db
       .update(schema.searchResults)
@@ -513,10 +549,14 @@ export class BattleService {
    */
   async setQualityWinner(
     battleQueryId: string,
-    qualityWinner: number
+    qualityWinner: number,
+    sessionId?: string
   ) {
+    // Verify the query's parent battle belongs to the caller's session
+    await this.assertBattleQueryOwnership(battleQueryId, sessionId);
+
     const value = qualityWinner === -1 ? null : String(qualityWinner);
-    
+
     await db
       .update(schema.battleQueries)
       .set({ qualityWinner: value })
