@@ -518,7 +518,22 @@ export class BattleService {
     sessionId?: string
   ) {
     // Verify the query's parent battle belongs to the caller's session
-    await this.assertBattleQueryOwnership(battleQueryId, sessionId);
+    const battleQuery = await this.assertBattleQueryOwnership(
+      battleQueryId,
+      sessionId
+    );
+
+    // Ensure the databaseId is actually one of the two databases in this
+    // battle, so a caller cannot reference an unrelated database (IDOR).
+    if (
+      isWinner &&
+      databaseId !== battleQuery.battle.databaseId1 &&
+      databaseId !== battleQuery.battle.databaseId2
+    ) {
+      throw new Error(
+        `Database ${databaseId} is not part of battle query ${battleQueryId}`
+      );
+    }
 
     // First, clear any existing winners for this query
     await db
