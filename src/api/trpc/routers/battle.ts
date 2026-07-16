@@ -91,7 +91,8 @@ export const battleRouter = router({
       return ctx.battleService.setManualWinner(
         input.battleQueryId,
         input.databaseId,
-        input.isWinner
+        input.isWinner,
+        ctx.sessionId
       );
     }),
 
@@ -104,7 +105,8 @@ export const battleRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.battleService.setQualityWinner(
         input.battleQueryId,
-        input.qualityWinner
+        input.qualityWinner,
+        ctx.sessionId
       );
     }),
 });
