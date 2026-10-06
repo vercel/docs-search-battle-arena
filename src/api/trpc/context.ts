@@ -1,6 +1,6 @@
 import { BattleService, DatabaseService } from "../services";
 import { getOrCreateSessionId } from "../../lib/session-middleware";
-import { isDev } from "@/lib/dev";
+import { isLocalDevAdmin } from "@/lib/dev";
 import { ipAddress } from "@vercel/functions";
 
 /**
@@ -13,7 +13,7 @@ export async function createTRPCContext(req: Request) {
     databaseService: new DatabaseService(),
     battleService: new BattleService(),
     sessionId,
-    isAdmin: isDev,
+    isAdmin: isLocalDevAdmin(req),
     ip: ipAddress(req),
   };
 }
